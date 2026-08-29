@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Task Flow | Designed for User</title>
-  
+
   <style>
     /* ==========================================================================
        1. MODERN DESIGN SYSTEM & VARIABLES
@@ -14,24 +14,24 @@
       --glass-bg: rgba(30, 41, 59, 0.7);
       --glass-border: rgba(255, 255, 255, 0.1);
       --glass-hover: rgba(51, 65, 85, 0.8);
-      
+
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
-      
+
       --accent-primary: #6366f1;
       --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       --accent-success: #10b981;
       --accent-danger: #ef4444;
-      
+
       --priority-low: #38bdf8;
       --priority-med: #f59e0b;
       --priority-high: #f43f5e;
-      
+
       --radius-sm: 8px;
       --radius-md: 14px;
       --radius-lg: 20px;
       --shadow-lg: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-      
+
       --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
@@ -48,7 +48,6 @@
       padding: 1.5rem;
     }
 
-    /* Container Glassmorphism */
     .app-card {
       width: 100%;
       max-width: 580px;
@@ -84,6 +83,14 @@
       padding: 0.4rem 0.8rem;
       border-radius: var(--radius-sm);
       border: 1px solid var(--glass-border);
+      white-space: nowrap;
+    }
+
+    .session-note {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      opacity: 0.7;
+      margin-top: 0.15rem;
     }
 
     /* ==========================================================================
@@ -198,7 +205,6 @@
       min-width: 0;
     }
 
-    /* Custom Checkbox */
     .checkbox {
       appearance: none;
       width: 20px;
@@ -240,7 +246,6 @@
       color: var(--text-muted);
     }
 
-    /* Tags & Controls */
     .priority-badge {
       font-size: 0.7rem;
       text-transform: uppercase;
@@ -248,6 +253,7 @@
       padding: 0.2rem 0.5rem;
       border-radius: 4px;
       letter-spacing: 0.05em;
+      flex-shrink: 0;
     }
 
     .priority-low { background: rgba(56, 189, 248, 0.15); color: var(--priority-low); }
@@ -257,6 +263,7 @@
     .action-group {
       display: flex;
       gap: 0.25rem;
+      flex-shrink: 0;
     }
 
     .btn-icon {
@@ -272,6 +279,16 @@
     .btn-icon:hover {
       color: var(--text-main);
       background: rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-icon:focus-visible,
+    .checkbox:focus-visible,
+    .filter-btn:focus-visible,
+    .input-field:focus-visible,
+    .select-field:focus-visible,
+    .btn-add:focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 2px;
     }
 
     .btn-delete:hover {
@@ -305,18 +322,21 @@
         <h1 class="brand-title">Task Flow</h1>
         <p style="font-size: 0.8rem; color: var(--text-muted);">Crafted for User</p>
       </div>
-      <div id="task-stats" class="task-stats">0 completed</div>
+      <div style="text-align: right;">
+        <div id="task-stats" class="task-stats">0 of 0 done</div>
+        <div class="session-note">Tasks last for this session</div>
+      </div>
     </header>
 
     <!-- Create Task Form -->
     <form id="todo-form" class="todo-form">
       <label for="todo-input" class="sr-only">Add a task</label>
-      <input 
-        type="text" 
-        id="todo-input" 
-        class="input-field" 
-        placeholder="Add a new task..." 
-        required 
+      <input
+        type="text"
+        id="todo-input"
+        class="input-field"
+        placeholder="Add a new task..."
+        required
         autocomplete="off"
       >
       <select id="priority-input" class="select-field" aria-label="Task Priority">
@@ -340,17 +360,26 @@
 
   <script>
     /* ==========================================================================
-       1. STATE MANAGEMENT & PERSISTENCE
+       1. STATE MANAGEMENT (in-memory only — see note below)
+       ==========================================================================
+       NOTE: The original version persisted tasks to localStorage. Browser storage
+       APIs (localStorage/sessionStorage) aren't available in this environment, so
+       state now lives purely in memory for the duration of the session. If you
+       run this file outside of Claude (as a plain .html file in a normal browser),
+       localStorage would work fine there and you could reintroduce it.
        ========================================================================== */
-    const STORAGE_KEY = 'user_taskflow_data_v2';
 
     let state = {
-      todos: JSON.parse(localStorage.getItem(STORAGE_KEY)) || [],
+      todos: [],
       filter: 'all'
     };
 
-    function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.todos));
+    let idCounter = 0;
+    function makeId() {
+      // Date.now() alone can collide if two tasks are added in the same
+      // millisecond; pair it with an incrementing counter to guarantee uniqueness.
+      idCounter += 1;
+      return `${Date.now()}-${idCounter}`;
     }
 
     /* ==========================================================================
@@ -364,22 +393,22 @@
     const taskStats = document.getElementById('task-stats');
 
     function render() {
-      // Filter logic
       const filtered = state.todos.filter(todo => {
         if (state.filter === 'active') return !todo.completed;
         if (state.filter === 'completed') return todo.completed;
         return true;
       });
 
-      // Update Header Metrics
       const completedCount = state.todos.filter(t => t.completed).length;
       taskStats.textContent = `${completedCount} of ${state.todos.length} done`;
 
-      // Render items
       todoList.innerHTML = '';
 
       if (filtered.length === 0) {
-        todoList.innerHTML = `<li class="empty-state">No tasks found. Add a task to get started!</li>`;
+        const emptyMessage = state.todos.length === 0
+          ? 'No tasks found. Add a task to get started!'
+          : 'Nothing here for this filter.';
+        todoList.innerHTML = `<li class="empty-state">${emptyMessage}</li>`;
         return;
       }
 
@@ -390,18 +419,18 @@
 
         li.innerHTML = `
           <div class="task-left">
-            <input 
-              type="checkbox" 
-              class="checkbox task-toggle" 
-              ${todo.completed ? 'checked' : ''} 
+            <input
+              type="checkbox"
+              class="checkbox task-toggle"
+              ${todo.completed ? 'checked' : ''}
               aria-label="Toggle completion status"
             >
             <span class="priority-badge priority-${todo.priority}">${todo.priority}</span>
             <span class="task-text">${escapeHTML(todo.text)}</span>
           </div>
           <div class="action-group">
-            <button class="btn-icon btn-edit" aria-label="Edit Task">✏️</button>
-            <button class="btn-icon btn-delete" aria-label="Delete Task">🗑️</button>
+            <button class="btn-icon btn-edit" aria-label="Edit Task" title="Edit">✏️</button>
+            <button class="btn-icon btn-delete" aria-label="Delete Task" title="Delete">🗑️</button>
           </div>
         `;
 
@@ -410,7 +439,7 @@
     }
 
     function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g, 
+      return str.replace(/[&<>'"]/g,
         tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
       );
     }
@@ -426,13 +455,12 @@
       if (!text) return;
 
       state.todos.unshift({
-        id: Date.now().toString(),
+        id: makeId(),
         text: text,
         priority: priorityInput.value,
         completed: false
       });
 
-      saveState();
       render();
 
       todoInput.value = '';
@@ -448,7 +476,6 @@
       // Toggle Complete
       if (e.target.classList.contains('task-toggle')) {
         state.todos = state.todos.map(t => t.id === id ? { ...t, completed: e.target.checked } : t);
-        saveState();
         render();
         return;
       }
@@ -456,24 +483,31 @@
       // Delete Task
       if (e.target.closest('.btn-delete')) {
         state.todos = state.todos.filter(t => t.id !== id);
-        saveState();
         render();
         return;
       }
 
-      // Inline Edit Task
+      // Inline Edit Task (text + priority)
       if (e.target.closest('.btn-edit')) {
         const taskObj = state.todos.find(t => t.id === id);
         if (!taskObj) return;
 
-        const currentText = taskObj.text;
-        const newText = prompt('Update your task:', currentText);
+        const newText = prompt('Update your task:', taskObj.text);
+        if (newText === null || newText.trim() === '') return;
 
-        if (newText !== null && newText.trim() !== '') {
-          state.todos = state.todos.map(t => t.id === id ? { ...t, text: newText.trim() } : t);
-          saveState();
-          render();
-        }
+        const priorityInputValue = prompt(
+          'Priority (low / med / high):',
+          taskObj.priority
+        );
+        const validPriorities = ['low', 'med', 'high'];
+        const newPriority = validPriorities.includes((priorityInputValue || '').trim().toLowerCase())
+          ? priorityInputValue.trim().toLowerCase()
+          : taskObj.priority;
+
+        state.todos = state.todos.map(t =>
+          t.id === id ? { ...t, text: newText.trim(), priority: newPriority } : t
+        );
+        render();
       }
     });
 
