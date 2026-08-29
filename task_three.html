@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Flow | Designed for User</title>
+  
+  <style>
+    /* ==========================================================================
+       1. MODERN DESIGN SYSTEM & VARIABLES
+       ========================================================================== */
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+      --glass-bg: rgba(30, 41, 59, 0.7);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --glass-hover: rgba(51, 65, 85, 0.8);
+      
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      
+      --accent-primary: #6366f1;
+      --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      --accent-success: #10b981;
+      --accent-danger: #ef4444;
+      
+      --priority-low: #38bdf8;
+      --priority-med: #f59e0b;
+      --priority-high: #f43f5e;
+      
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-lg: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+      
+      --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem;
+    }
+
+    /* Container Glassmorphism */
+    .app-card {
+      width: 100%;
+      max-width: 580px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      box-shadow: var(--shadow-lg);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .brand-title {
+      font-size: 1.75rem;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.025em;
+    }
+
+    .task-stats {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.4rem 0.8rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--glass-border);
+    }
+
+    /* ==========================================================================
+       2. FORM & INPUTS
+       ========================================================================== */
+    .todo-form {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .input-field, .select-field {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-md);
+      font-size: 0.95rem;
+      outline: none;
+      transition: var(--transition);
+    }
+
+    .input-field:focus, .select-field:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .btn-add {
+      background: var(--accent-gradient);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1.25rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-add:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    /* ==========================================================================
+       3. TABS & FILTERS
+       ========================================================================== */
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      background: rgba(15, 23, 42, 0.4);
+      padding: 0.25rem;
+      border-radius: var(--radius-md);
+      margin-bottom: 1.5rem;
+      border: 1px solid var(--glass-border);
+    }
+
+    .filter-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.5rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .filter-btn.active {
+      background: var(--accent-primary);
+      color: white;
+    }
+
+    /* ==========================================================================
+       4. DYNAMIC TASK LIST
+       ========================================================================== */
+    .task-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 400px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+
+    .task-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--glass-border);
+      padding: 0.85rem 1rem;
+      border-radius: var(--radius-md);
+      transition: var(--transition);
+      animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .task-item:hover {
+      background: var(--glass-hover);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .task-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Custom Checkbox */
+    .checkbox {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      display: grid;
+      place-content: center;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+
+    .checkbox::before {
+      content: "✓";
+      font-size: 12px;
+      color: white;
+      transform: scale(0);
+      transition: var(--transition);
+    }
+
+    .checkbox:checked {
+      background: var(--accent-success);
+      border-color: var(--accent-success);
+    }
+
+    .checkbox:checked::before {
+      transform: scale(1);
+    }
+
+    .task-text {
+      font-size: 0.95rem;
+      word-break: break-word;
+      transition: var(--transition);
+    }
+
+    .task-item.completed .task-text {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    /* Tags & Controls */
+    .priority-badge {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .priority-low { background: rgba(56, 189, 248, 0.15); color: var(--priority-low); }
+    .priority-med { background: rgba(245, 158, 11, 0.15); color: var(--priority-med); }
+    .priority-high { background: rgba(244, 63, 94, 0.15); color: var(--priority-high); }
+
+    .action-group {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .btn-icon {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.4rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-icon:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-delete:hover {
+      color: var(--accent-danger);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .empty-state {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 2rem;
+      font-size: 0.9rem;
+    }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0, 0, 0, 0); border: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="app-card">
+    <header>
+      <div>
+        <h1 class="brand-title">Task Flow</h1>
+        <p style="font-size: 0.8rem; color: var(--text-muted);">Crafted for User</p>
+      </div>
+      <div id="task-stats" class="task-stats">0 completed</div>
+    </header>
+
+    <!-- Create Task Form -->
+    <form id="todo-form" class="todo-form">
+      <label for="todo-input" class="sr-only">Add a task</label>
+      <input 
+        type="text" 
+        id="todo-input" 
+        class="input-field" 
+        placeholder="Add a new task..." 
+        required 
+        autocomplete="off"
+      >
+      <select id="priority-input" class="select-field" aria-label="Task Priority">
+        <option value="low">Low</option>
+        <option value="med" selected>Med</option>
+        <option value="high">High</option>
+      </select>
+      <button type="submit" class="btn-add">Add</button>
+    </form>
+
+    <!-- Filter Control Bar -->
+    <nav id="filter-bar" class="filter-bar" role="tablist" aria-label="Task Filtering">
+      <button class="filter-btn active" data-filter="all" role="tab" aria-selected="true">All</button>
+      <button class="filter-btn" data-filter="active" role="tab" aria-selected="false">Active</button>
+      <button class="filter-btn" data-filter="completed" role="tab" aria-selected="false">Completed</button>
+    </nav>
+
+    <!-- Task List Anchor -->
+    <ul id="todo-list" class="task-list" aria-live="polite"></ul>
+  </main>
+
+  <script>
+    /* ==========================================================================
+       1. STATE MANAGEMENT & PERSISTENCE
+       ========================================================================== */
+    const STORAGE_KEY = 'user_taskflow_data_v2';
+
+    let state = {
+      todos: JSON.parse(localStorage.getItem(STORAGE_KEY)) || [],
+      filter: 'all'
+    };
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.todos));
+    }
+
+    /* ==========================================================================
+       2. DOM SELECTORS & CENTRAL RENDER ENGINE
+       ========================================================================== */
+    const todoForm = document.getElementById('todo-form');
+    const todoInput = document.getElementById('todo-input');
+    const priorityInput = document.getElementById('priority-input');
+    const todoList = document.getElementById('todo-list');
+    const filterBar = document.getElementById('filter-bar');
+    const taskStats = document.getElementById('task-stats');
+
+    function render() {
+      // Filter logic
+      const filtered = state.todos.filter(todo => {
+        if (state.filter === 'active') return !todo.completed;
+        if (state.filter === 'completed') return todo.completed;
+        return true;
+      });
+
+      // Update Header Metrics
+      const completedCount = state.todos.filter(t => t.completed).length;
+      taskStats.textContent = `${completedCount} of ${state.todos.length} done`;
+
+      // Render items
+      todoList.innerHTML = '';
+
+      if (filtered.length === 0) {
+        todoList.innerHTML = `<li class="empty-state">No tasks found. Add a task to get started!</li>`;
+        return;
+      }
+
+      filtered.forEach(todo => {
+        const li = document.createElement('li');
+        li.className = `task-item ${todo.completed ? 'completed' : ''}`;
+        li.dataset.id = todo.id;
+
+        li.innerHTML = `
+          <div class="task-left">
+            <input 
+              type="checkbox" 
+              class="checkbox task-toggle" 
+              ${todo.completed ? 'checked' : ''} 
+              aria-label="Toggle completion status"
+            >
+            <span class="priority-badge priority-${todo.priority}">${todo.priority}</span>
+            <span class="task-text">${escapeHTML(todo.text)}</span>
+          </div>
+          <div class="action-group">
+            <button class="btn-icon btn-edit" aria-label="Edit Task">✏️</button>
+            <button class="btn-icon btn-delete" aria-label="Delete Task">🗑️</button>
+          </div>
+        `;
+
+        todoList.appendChild(li);
+      });
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    }
+
+    /* ==========================================================================
+       3. EVENT HANDLERS & DELEGATION (CRUD)
+       ========================================================================== */
+
+    // CREATE: Add Task
+    todoForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = todoInput.value.trim();
+      if (!text) return;
+
+      state.todos.unshift({
+        id: Date.now().toString(),
+        text: text,
+        priority: priorityInput.value,
+        completed: false
+      });
+
+      saveState();
+      render();
+
+      todoInput.value = '';
+      todoInput.focus();
+    });
+
+    // UPDATE & DELETE via Delegated Event Listener
+    todoList.addEventListener('click', (e) => {
+      const taskItem = e.target.closest('.task-item');
+      if (!taskItem) return;
+      const id = taskItem.dataset.id;
+
+      // Toggle Complete
+      if (e.target.classList.contains('task-toggle')) {
+        state.todos = state.todos.map(t => t.id === id ? { ...t, completed: e.target.checked } : t);
+        saveState();
+        render();
+        return;
+      }
+
+      // Delete Task
+      if (e.target.closest('.btn-delete')) {
+        state.todos = state.todos.filter(t => t.id !== id);
+        saveState();
+        render();
+        return;
+      }
+
+      // Inline Edit Task
+      if (e.target.closest('.btn-edit')) {
+        const taskObj = state.todos.find(t => t.id === id);
+        if (!taskObj) return;
+
+        const currentText = taskObj.text;
+        const newText = prompt('Update your task:', currentText);
+
+        if (newText !== null && newText.trim() !== '') {
+          state.todos = state.todos.map(t => t.id === id ? { ...t, text: newText.trim() } : t);
+          saveState();
+          render();
+        }
+      }
+    });
+
+    // READ: Filter Switcher
+    filterBar.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('filter-btn')) return;
+
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+      });
+
+      e.target.classList.add('active');
+      e.target.setAttribute('aria-selected', 'true');
+
+      state.filter = e.target.dataset.filter;
+      render();
+    });
+
+    // Initial Render
+    render();
+  </script>
+</body>
+</html>
