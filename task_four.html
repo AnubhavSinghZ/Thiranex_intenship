@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Weather Dashboard | Async JS & REST API</title>
+  <title>Weather Dashboard | Autocomplete & REST API</title>
   
   <style>
     :root {
@@ -48,11 +48,15 @@
       color: var(--accent);
     }
 
-    /* Search Form */
+    /* Search Form & Autocomplete Dropdown */
+    .search-wrapper {
+      position: relative;
+      margin-bottom: 1.5rem;
+    }
+
     .search-form {
       display: flex;
       gap: 0.5rem;
-      margin-bottom: 1.5rem;
     }
 
     .search-input {
@@ -83,6 +87,51 @@
 
     .btn-search:hover { opacity: 0.9; }
     .btn-search:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Autocomplete Pop-up List */
+    .suggestions-list {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #1e293b;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      list-style: none;
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+    }
+
+    .suggestion-item {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      transition: background 0.2s;
+    }
+
+    .suggestion-item:last-child {
+      border-bottom: none;
+    }
+
+    .suggestion-item:hover, .suggestion-item:focus {
+      background: rgba(56, 189, 248, 0.15);
+      outline: none;
+    }
+
+    .city-label {
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .country-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
 
     /* Weather Display Cards */
     .weather-display {
@@ -135,20 +184,28 @@
   <main class="dashboard">
     <h1>Real-Time Weather</h1>
 
-    <form id="search-form" class="search-form">
-      <input 
-        type="text" 
-        id="city-input" 
-        class="search-input" 
-        placeholder="Enter city name (e.g. London)" 
-        required 
-        autocomplete="off"
-      >
-      <button type="submit" id="search-btn" class="btn-search">Search</button>
-    </form>
+    <!-- Search Form with Autocomplete Wrapper -->
+    <div class="search-wrapper">
+      <form id="search-form" class="search-form">
+        <input 
+          type="text" 
+          id="city-input" 
+          class="search-input" 
+          placeholder="Enter city name (e.g. London)" 
+          required 
+          autocomplete="off"
+        >
+        <button type="submit" id="search-btn" class="btn-search">Search</button>
+      </form>
+      
+      <!-- Pop-up suggestions list -->
+      <ul id="suggestions-list" class="suggestions-list hidden" role="listbox"></ul>
+    </div>
 
+    <!-- Status Messages (Loading/Error) -->
     <div id="status-container" class="status-msg hidden"></div>
 
+    <!-- Live Weather Content -->
     <article id="weather-content" class="weather-display hidden">
       <div class="city-info">
         <h2 id="display-city" class="city-name">--</h2>
@@ -175,6 +232,7 @@
     const searchForm = document.getElementById('search-form');
     const cityInput = document.getElementById('city-input');
     const searchBtn = document.getElementById('search-btn');
+    const suggestionsList = document.getElementById('suggestions-list');
     const statusContainer = document.getElementById('status-container');
     const weatherContent = document.getElementById('weather-content');
 
@@ -183,36 +241,49 @@
     const displayHumidity = document.getElementById('display-humidity');
     const displayWind = document.getElementById('display-wind');
 
+    let debounceTimer = null;
+
     /* ==========================================================================
        2. ASYNCHRONOUS API SERVICE LAYER
        ========================================================================== */
 
     /**
-     * Step 1: Resolve City Name to Lat/Long Coordinates (Geocoding API)
+     * Search multiple matching cities for the autocomplete dropdown
+     */
+    async function fetchCitySuggestions(query) {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`;
+      const response = await fetch(url);
+      
+      if (!response.ok) return [];
+      
+      const data = await response.json();
+      return data.results || [];
+    }
+
+    /**
+     * Resolve single city coordinates for final execution
      */
     async function fetchCoordinates(cityName) {
       const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=en&format=json`;
       
       const response = await fetch(url);
       
-      // Handle HTTP status errors (e.g., 404, 500)
       if (!response.ok) {
         throw new Error(`Geocoding server error (${response.status})`);
       }
 
       const data = await response.json();
       
-      // Handle empty search results
       if (!data.results || data.results.length === 0) {
         throw new Error(`City "${cityName}" not found. Please check spelling.`);
       }
 
       const { name, country, latitude, longitude } = data.results[0];
-      return { name: `${name}, ${country}`, latitude, longitude };
+      return { name: `${name}, ${country || ''}`.replace(/,\s*$/, ''), latitude, longitude };
     }
 
     /**
-     * Step 2: Fetch Live Weather Metrics using Coordinates (Weather API)
+     * Fetch live weather metrics using lat/lon coordinates
      */
     async function fetchWeatherData(lat, lon) {
       const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m`;
@@ -229,6 +300,31 @@
     /* ==========================================================================
        3. UI STATE & RENDER LOGIC
        ========================================================================== */
+
+    function hideSuggestions() {
+      suggestionsList.innerHTML = '';
+      suggestionsList.classList.add('hidden');
+    }
+
+    function renderSuggestions(cities) {
+      if (cities.length === 0) {
+        hideSuggestions();
+        return;
+      }
+
+      suggestionsList.innerHTML = cities.map(city => {
+        const countryText = city.country ? city.country : '';
+        const stateText = city.admin1 ? `, ${city.admin1}` : '';
+        return `
+          <li class="suggestion-item" data-name="${city.name}" data-lat="${city.latitude}" data-lon="${city.longitude}" data-country="${countryText}">
+            <span class="city-label">${city.name}${stateText}</span>
+            <span class="country-label">${countryText}</span>
+          </li>
+        `;
+      }).join('');
+
+      suggestionsList.classList.remove('hidden');
+    }
 
     function showLoading() {
       statusContainer.className = 'status-msg';
@@ -247,7 +343,6 @@
     }
 
     function renderWeather(cityName, data) {
-      // Parse nested current weather JSON response
       const { temperature_2m, relative_humidity_2m, wind_speed_10m } = data.current;
 
       displayCity.textContent = cityName;
@@ -260,38 +355,89 @@
       searchBtn.disabled = false;
     }
 
-    /* ==========================================================================
-       4. EVENT HANDLER & CONTROLLER
-       ========================================================================== */
-
-    searchForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const query = cityInput.value.trim();
-      
-      if (!query) return;
-
+    async function executeWeatherSearch(cityName, lat = null, lon = null, countryName = '') {
+      hideSuggestions();
       showLoading();
 
       try {
-        // Asynchronous Pipeline Execution
-        const location = await fetchCoordinates(query);
-        const weatherData = await fetchWeatherData(location.latitude, location.longitude);
-        
-        // Dynamic DOM Update
-        renderWeather(location.name, weatherData);
+        let locationName = cityName;
+        let latitude = lat;
+        let longitude = lon;
+
+        // If coordinates weren't directly provided from autocomplete selection, fetch them
+        if (latitude === null || longitude === null) {
+          const location = await fetchCoordinates(cityName);
+          latitude = location.latitude;
+          longitude = location.longitude;
+          locationName = location.name;
+        } else {
+          locationName = countryName ? `${cityName}, ${countryName}` : cityName;
+        }
+
+        const weatherData = await fetchWeatherData(latitude, longitude);
+        renderWeather(locationName, weatherData);
       } catch (error) {
-        // Global Error Handler for Network Errors / Unhandled Exceptions
         if (error instanceof TypeError) {
           showError('Network error. Please check your internet connection.');
         } else {
           showError(error.message);
         }
       }
+    }
+
+    /* ==========================================================================
+       4. EVENT HANDLERS & AUTOCOMPLETE CONTROLLER
+       ========================================================================== */
+
+    // Live typing listener with 300ms debounce
+    cityInput.addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+
+      clearTimeout(debounceTimer);
+
+      if (query.length < 2) {
+        hideSuggestions();
+        return;
+      }
+
+      debounceTimer = setTimeout(async () => {
+        const matches = await fetchCitySuggestions(query);
+        renderSuggestions(matches);
+      }, 300);
+    });
+
+    // Handle suggestion selection from pop-up list
+    suggestionsList.addEventListener('click', (e) => {
+      const item = e.target.closest('.suggestion-item');
+      if (!item) return;
+
+      const cityName = item.dataset.name;
+      const countryName = item.dataset.country;
+      const lat = parseFloat(item.dataset.lat);
+      const lon = parseFloat(item.dataset.lon);
+
+      cityInput.value = countryName ? `${cityName}, ${countryName}` : cityName;
+      executeWeatherSearch(cityName, lat, lon, countryName);
+    });
+
+    // Close pop-up list if clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-wrapper')) {
+        hideSuggestions();
+      }
+    });
+
+    // Manual form submission fallback
+    searchForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const query = cityInput.value.trim();
+      if (!query) return;
+      executeWeatherSearch(query);
     });
 
     // Default Initial Load
     cityInput.value = 'New York';
-    searchForm.dispatchEvent(new Event('submit'));
+    executeWeatherSearch('New York');
   </script>
 </body>
 </html>
