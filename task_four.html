@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather Dashboard | Async JS & REST API</title>
+  
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem;
+    }
+
+    .dashboard {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+      color: var(--accent);
+    }
+
+    /* Search Form */
+    .search-form {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .search-input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-search {
+      padding: 0.75rem 1.25rem;
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn-search:hover { opacity: 0.9; }
+    .btn-search:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Weather Display Cards */
+    .weather-display {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .city-info { text-align: center; }
+    .city-name { font-size: 1.75rem; font-weight: 700; }
+    .temp-main { font-size: 3.5rem; font-weight: 800; color: var(--accent); margin: 0.5rem 0; }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .metric-card {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--card-border);
+      padding: 1rem;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .metric-label { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .metric-value { font-size: 1.25rem; font-weight: 600; }
+
+    /* Feedback & Loading States */
+    .status-msg {
+      text-align: center;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+
+    .error-msg {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <main class="dashboard">
+    <h1>Real-Time Weather</h1>
+
+    <form id="search-form" class="search-form">
+      <input 
+        type="text" 
+        id="city-input" 
+        class="search-input" 
+        placeholder="Enter city name (e.g. London)" 
+        required 
+        autocomplete="off"
+      >
+      <button type="submit" id="search-btn" class="btn-search">Search</button>
+    </form>
+
+    <div id="status-container" class="status-msg hidden"></div>
+
+    <article id="weather-content" class="weather-display hidden">
+      <div class="city-info">
+        <h2 id="display-city" class="city-name">--</h2>
+        <div id="display-temp" class="temp-main">--°C</div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Relative Humidity</div>
+          <div id="display-humidity" class="metric-value">--%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Wind Speed</div>
+          <div id="display-wind" class="metric-value">-- km/h</div>
+        </div>
+      </div>
+    </article>
+  </main>
+
+  <script>
+    /* ==========================================================================
+       1. DOM SELECTORS
+       ========================================================================== */
+    const searchForm = document.getElementById('search-form');
+    const cityInput = document.getElementById('city-input');
+    const searchBtn = document.getElementById('search-btn');
+    const statusContainer = document.getElementById('status-container');
+    const weatherContent = document.getElementById('weather-content');
+
+    const displayCity = document.getElementById('display-city');
+    const displayTemp = document.getElementById('display-temp');
+    const displayHumidity = document.getElementById('display-humidity');
+    const displayWind = document.getElementById('display-wind');
+
+    /* ==========================================================================
+       2. ASYNCHRONOUS API SERVICE LAYER
+       ========================================================================== */
+
+    /**
+     * Step 1: Resolve City Name to Lat/Long Coordinates (Geocoding API)
+     */
+    async function fetchCoordinates(cityName) {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=en&format=json`;
+      
+      const response = await fetch(url);
+      
+      // Handle HTTP status errors (e.g., 404, 500)
+      if (!response.ok) {
+        throw new Error(`Geocoding server error (${response.status})`);
+      }
+
+      const data = await response.json();
+      
+      // Handle empty search results
+      if (!data.results || data.results.length === 0) {
+        throw new Error(`City "${cityName}" not found. Please check spelling.`);
+      }
+
+      const { name, country, latitude, longitude } = data.results[0];
+      return { name: `${name}, ${country}`, latitude, longitude };
+    }
+
+    /**
+     * Step 2: Fetch Live Weather Metrics using Coordinates (Weather API)
+     */
+    async function fetchWeatherData(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m`;
+
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Weather data service error (${response.status})`);
+      }
+
+      return await response.json();
+    }
+
+    /* ==========================================================================
+       3. UI STATE & RENDER LOGIC
+       ========================================================================== */
+
+    function showLoading() {
+      statusContainer.className = 'status-msg';
+      statusContainer.textContent = 'Fetching weather data...';
+      statusContainer.classList.remove('hidden');
+      weatherContent.classList.add('hidden');
+      searchBtn.disabled = true;
+    }
+
+    function showError(message) {
+      statusContainer.className = 'status-msg error-msg';
+      statusContainer.textContent = message;
+      statusContainer.classList.remove('hidden');
+      weatherContent.classList.add('hidden');
+      searchBtn.disabled = false;
+    }
+
+    function renderWeather(cityName, data) {
+      // Parse nested current weather JSON response
+      const { temperature_2m, relative_humidity_2m, wind_speed_10m } = data.current;
+
+      displayCity.textContent = cityName;
+      displayTemp.textContent = `${Math.round(temperature_2m)}°C`;
+      displayHumidity.textContent = `${relative_humidity_2m}%`;
+      displayWind.textContent = `${wind_speed_10m} km/h`;
+
+      statusContainer.classList.add('hidden');
+      weatherContent.classList.remove('hidden');
+      searchBtn.disabled = false;
+    }
+
+    /* ==========================================================================
+       4. EVENT HANDLER & CONTROLLER
+       ========================================================================== */
+
+    searchForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const query = cityInput.value.trim();
+      
+      if (!query) return;
+
+      showLoading();
+
+      try {
+        // Asynchronous Pipeline Execution
+        const location = await fetchCoordinates(query);
+        const weatherData = await fetchWeatherData(location.latitude, location.longitude);
+        
+        // Dynamic DOM Update
+        renderWeather(location.name, weatherData);
+      } catch (error) {
+        // Global Error Handler for Network Errors / Unhandled Exceptions
+        if (error instanceof TypeError) {
+          showError('Network error. Please check your internet connection.');
+        } else {
+          showError(error.message);
+        }
+      }
+    });
+
+    // Default Initial Load
+    cityInput.value = 'New York';
+    searchForm.dispatchEvent(new Event('submit'));
+  </script>
+</body>
+</html>
